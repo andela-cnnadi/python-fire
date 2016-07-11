@@ -56,29 +56,31 @@ class EventSourceClient(threading.Thread):
             self.sse = ClosableSSEClient(self.url)
             for msg in self.sse:
                 event = msg.event
-                if event is not None and event in ('put', 'patch'):
-                    response = json.loads(msg.data)
-                    if response is not None:
-                        # Default to CHILD_CHANGED event
-                        occurred_event = FirebaseEvents.CHILD_CHANGED
-                        if response['data'] is None:
-                            occurred_event = FirebaseEvents.CHILD_DELETED
+                if event is None and event not in ('put', 'patch'):
+                    continue
+                response = json.loads(msg.data)
+                if response is None:
+                    continue
+                # Default to CHILD_CHANGED event
+                occurred_event = FirebaseEvents.CHILD_CHANGED
+                if response['data'] is None:
+                    occurred_event = FirebaseEvents.CHILD_DELETED
 
-                        # Get the event I'm trying to listen to
-                        ev = FirebaseEvents.id(self.event_name)
-                        if occurred_event == ev or ev == FirebaseEvents.CHILD_CHANGED:
-                            self.callback(event, response)
+                # Get the event I'm trying to listen to
+                ev = FirebaseEvents.id(self.event_name)
+                if occurred_event == ev or ev == FirebaseEvents.CHILD_CHANGED:
+                    self.callback(event, response)
         except socket.error:
             pass
 
 
 class FirebaseReference(object):
     def __new__(cls, *args):
-        if len(args) == 2:
-            connector = args[0]
-            if isinstance(connector, Firebase):
-                if args[1] is None or FirebaseReference.is_valid(args[1]):
-                    return super(FirebaseReference, cls).__new__(cls)
+        if len(args) != 2:
+            return None
+        connector = args[0]
+        if isinstance(connector, Firebase) and args[1] is None or FirebaseReference.is_valid(args[1]):
+            return super(FirebaseReference, cls).__new__(cls)
         return None
 
     def __init__(self, connector, reference=None):
@@ -118,9 +120,7 @@ class FirebaseReference(object):
     def is_valid(reference):
         pattern = re.compile('^[a-zA-Z0-9_-]+(\/[a-zA-Z0-9_-]+)*$')
         matches = pattern.match(reference)
-        if matches:
-            return True
-        return False
+        return True if matches else False
 
     @property
     def current_url(self):
@@ -163,9 +163,8 @@ class Firebase(object):
     FIREBASE_URL = None
 
     def __new__(cls, *args):
-        if len(args) == 1:
-            if Firebase.is_valid_firebase_url(args[0]):
-                return super(Firebase, cls).__new__(cls)
+        if len(args) == 1 and Firebase.is_valid_firebase_url(args[0]):
+            return super(Firebase, cls).__new__(cls)
         return None
 
     def __init__(self, url):
@@ -177,9 +176,7 @@ class Firebase(object):
             r'^https://[a-zA-Z0-9_\-]+\.firebaseio(-demo)?\.com/?$'
         )
         matches = pattern.match(url)
-        if matches:
-            return True
-        return False
+        return True if matches else False
 
     def ref(self, reference=None):
         ref = FirebaseReference(self, reference)
